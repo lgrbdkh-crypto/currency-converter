@@ -5,18 +5,11 @@ const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 
-// Load fiat currencies dari exchangerate.host
-async function loadFiatCurrencies() {
-  const res = await fetch("https://api.exchangerate.host/symbols");
+// Load currencies from local JSON
+async function loadCurrencies() {
+  const res = await fetch("currencies.json");
   const data = await res.json();
-  return data.symbols; // object { USD: {description:"US Dollar"}, ... }
-}
-
-// Load crypto currencies dari file lokal
-async function loadCryptoCurrencies() {
-  const res = await fetch("crypto.json");
-  const data = await res.json();
-  return data; // object { BTC: "Bitcoin", ... }
+  return data;
 }
 
 // Populate dropdowns
@@ -24,7 +17,7 @@ function populateDropdowns(symbols) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
   for (const code in symbols) {
-    const name = symbols[code].description || symbols[code];
+    const name = symbols[code];
     const option1 = document.createElement("option");
     option1.value = code;
     option1.textContent = `${code} - ${name}`;
@@ -37,63 +30,68 @@ function populateDropdowns(symbols) {
   }
 }
 
-// Convert function
+// Convert currency (using exchangerate.host for fiat, CoinGecko for crypto)
 async function convertCurrency() {
+  const data = await loadCurrencies();
   const mode = modeSelect.value;
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
 
   if (!amount || amount <= 0) {
-    result.textContent = "Masukkan jumlah yang valid.";
+    result.textContent = "Please enter a valid amount.";
     return;
   }
 
   try {
     let converted = 0;
 
-    if (mode === "fiat") {
+    const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
+    if (mode === "fiat" || (!cryptoCoins.includes(from) && !cryptoCoins.includes(to))) {
       // fiat -> fiat
       const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
       const res = await fetch(url);
       const data = await res.json();
       converted = data.result;
     } else {
-      // crypto -> fiat/crypto
-      const fiatMap = {USD:"usd",EUR:"eur",IDR:"idr",JPY:"jpy",GBP:"gbp",AUD:"aud",CAD:"cad",CHF:"chf",CNY:"cny",SGD:"sgd"};
-      const cryptoCodes = ["BTC","ETH","USDT","BNB","XRP","DOGE"];
-      let fromId = cryptoCodes.includes(from) ? from.toLowerCase() : fiatMap[from];
-      let toId = cryptoCodes.includes(to) ? to.toLowerCase() : fiatMap[to];
+      // crypto -> fiat or crypto
+      const coinMap = {};
+      cryptoCoins.forEach(c => coinMap[c] = c.toLowerCase());
+      const fiatMap = {};
+      Object.keys(data).forEach(c => {
+        if (!cryptoCoins.includes(c)) fiatMap[c] = c.toLowerCase();
+      });
+
+      let fromId = cryptoCoins.includes(from) ? coinMap[from] : fiatMap[from];
+      let toId = cryptoCoins.includes(to) ? coinMap[to] : fiatMap[to];
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
       const res = await fetch(url);
-      const data = await res.json();
-
-      converted = data[fromId][toId] * amount;
+      const dataCG = await res.json();
+      converted = dataCG[fromId][toId] * amount;
     }
 
     result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
   } catch (error) {
-    result.textContent = "Gagal melakukan konversi 😢 — " + error.message;
+    result.textContent = "Conversion failed 😢 — " + error.message;
     console.error(error);
   }
 }
 
 // Mode change listener
 modeSelect.addEventListener("change", async () => {
+  const data = await loadCurrencies();
   if (modeSelect.value === "fiat") {
-    const fiatSymbols = await loadFiatCurrencies();
-    populateDropdowns(fiatSymbols);
+    populateDropdowns(data);
   } else {
-    const cryptoSymbols = await loadCryptoCurrencies();
-    populateDropdowns(cryptoSymbols);
+    populateDropdowns(data);
   }
 });
 
 // Initial load
 (async function init() {
-  const fiatSymbols = await loadFiatCurrencies();
-  populateDropdowns(fiatSymbols);
+  const data = await loadCurrencies();
+  populateDropdowns(data);
 })();
 
 convertBtn.addEventListener("click", convertCurrency);
