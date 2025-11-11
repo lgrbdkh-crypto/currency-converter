@@ -4,11 +4,11 @@ const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 
-// Load currencies dari file JSON lokal
+// Load currencies dari JSON lokal
 async function loadCurrencies() {
   try {
     const response = await fetch("currencies.json");
-    if (!response.ok) throw new Error("currencies.json not found");
+    if (!response.ok) throw new Error("currencies.json tidak ditemukan");
     const data = await response.json();
     if (!data) throw new Error("currencies.json kosong atau invalid");
 
@@ -34,8 +34,8 @@ async function loadCurrencies() {
   }
 }
 
-// Fungsi convert sederhana dengan rate statis
-function convertCurrency() {
+// Fungsi untuk convert real-time
+async function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
@@ -45,22 +45,40 @@ function convertCurrency() {
     return;
   }
 
-  // Contoh rate statis
-  const rates = {
-    USD: 1,
-    EUR: 0.92,
-    IDR: 15600,
-    JPY: 150,
-    GBP: 0.79,
-    AUD: 1.45,
-    CAD: 1.33,
-    CHF: 0.88,
-    CNY: 7.2,
-    SGD: 1.36
-  };
+  try {
+    let converted = 0;
 
-  const converted = (amount / rates[from]) * rates[to];
-  result.textContent = `${amount} ${from} = ${converted.toFixed(2)} ${to}`;
+    // Jika salah satu mata uang adalah crypto
+    const cryptoCodes = ["BTC","ETH","USDT","BNB"];
+
+    if (cryptoCodes.includes(from) || cryptoCodes.includes(to)) {
+      // CoinGecko API
+      let fromId = from.toLowerCase();
+      let toId = to.toLowerCase();
+
+      // CoinGecko membutuhkan ID crypto; beberapa fiat harus diganti
+      const fiatMap = {USD:"usd",EUR:"eur",IDR:"idr",JPY:"jpy",GBP:"gbp",AUD:"aud",CAD:"cad",CHF:"chf",CNY:"cny",SGD:"sgd"};
+      if (!cryptoCodes.includes(from)) fromId = fiatMap[from];
+      if (!cryptoCodes.includes(to)) toId = fiatMap[to];
+
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      converted = data[fromId][toId] * amount;
+    } else {
+      // fiat ke fiat via exchangerate.host
+      const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      converted = data.result;
+    }
+
+    result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
+  } catch (error) {
+    result.textContent = "Gagal melakukan konversi 😢 — " + error.message;
+    console.error(error);
+  }
 }
 
 convertBtn.addEventListener("click", convertCurrency);
