@@ -34,7 +34,7 @@ async function loadCurrencies() {
   }
 }
 
-// Fungsi untuk convert real-time
+// Fungsi convert real-time
 async function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
@@ -47,19 +47,14 @@ async function convertCurrency() {
 
   try {
     let converted = 0;
-
-    // Jika salah satu mata uang adalah crypto
     const cryptoCodes = ["BTC","ETH","USDT","BNB"];
+    const fiatCodes = ["USD","EUR","IDR","JPY","GBP","AUD","CAD","CHF","CNY","SGD"];
 
     if (cryptoCodes.includes(from) || cryptoCodes.includes(to)) {
       // CoinGecko API
-      let fromId = from.toLowerCase();
-      let toId = to.toLowerCase();
-
-      // CoinGecko membutuhkan ID crypto; beberapa fiat harus diganti
       const fiatMap = {USD:"usd",EUR:"eur",IDR:"idr",JPY:"jpy",GBP:"gbp",AUD:"aud",CAD:"cad",CHF:"chf",CNY:"cny",SGD:"sgd"};
-      if (!cryptoCodes.includes(from)) fromId = fiatMap[from];
-      if (!cryptoCodes.includes(to)) toId = fiatMap[to];
+      let fromId = cryptoCodes.includes(from) ? from.toLowerCase() : fiatMap[from];
+      let toId = cryptoCodes.includes(to) ? to.toLowerCase() : fiatMap[to];
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
       const response = await fetch(url);
