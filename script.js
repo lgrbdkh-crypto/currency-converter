@@ -1,25 +1,33 @@
-// Ambil elemen HTML
-const modeSelect = document.getElementById("modeSelect"); // kalau ada menu mode
+const modeSelect = document.getElementById("modeSelect");
 const fromCurrency = document.getElementById("fromCurrency");
 const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 
-// Load currencies dari JSON
+const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
+
 async function loadCurrencies() {
   const res = await fetch("currencies.json");
   const data = await res.json();
   return data;
 }
 
-// Populate dropdown
-function populateDropdowns(symbols) {
+function filterByMode(data, mode) {
+  if (mode === "fiat") {
+    return Object.fromEntries(Object.entries(data).filter(([k]) => !cryptoCoins.includes(k)));
+  } else if (mode === "crypto") {
+    return Object.fromEntries(Object.entries(data).filter(([k]) => cryptoCoins.includes(k)));
+  }
+  return data; // all
+}
+
+function populateDropdowns(data) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
 
-  for (const code in symbols) {
-    const name = symbols[code];
+  for (const code in data) {
+    const name = data[code];
 
     const option1 = document.createElement("option");
     option1.value = code;
@@ -33,9 +41,7 @@ function populateDropdowns(symbols) {
   }
 }
 
-// Convert currency
 async function convertCurrency() {
-  const data = await loadCurrencies();
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
@@ -46,22 +52,17 @@ async function convertCurrency() {
   }
 
   try {
-    let converted = 0;
-    const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
+    let converted = null;
 
-    // Cek apakah from/to adalah crypto
     const isFromCrypto = cryptoCoins.includes(from);
     const isToCrypto = cryptoCoins.includes(to);
 
     if (!isFromCrypto && !isToCrypto) {
-      // fiat → fiat
       const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
       const res = await fetch(url);
       const data = await res.json();
       converted = data.result;
     } else {
-      // crypto → fiat / crypto
-      // Map coin ke ID CoinGecko
       const coinMap = {
         "BTC": "bitcoin",
         "ETH": "ethereum",
@@ -74,36 +75,41 @@ async function convertCurrency() {
         "SOL": "solana"
       };
 
-      const fromId = cryptoCoins.includes(from) ? coinMap[from] : from.toLowerCase();
-      const toId = cryptoCoins.includes(to) ? coinMap[to] : to.toLowerCase();
+      const fromId = isFromCrypto ? coinMap[from] : from.toLowerCase();
+      const toId = isToCrypto ? coinMap[to] : to.toLowerCase();
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
       const res = await fetch(url);
       const dataCG = await res.json();
 
-      converted = dataCG[fromId][toId] * amount;
+      if (dataCG[fromId] && dataCG[fromId][toId] !== undefined) {
+        converted = dataCG[fromId][toId] * amount;
+      } else {
+        throw new Error("Failed to get conversion rate from CoinGecko");
+      }
     }
 
-    result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
+    if (converted === null) {
+      result.textContent = "Conversion failed 😢";
+    } else {
+      result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
+    }
   } catch (error) {
     result.textContent = "Conversion failed 😢 — " + error.message;
     console.error(error);
   }
 }
 
-// Inisialisasi dropdown saat page load
 (async function init() {
   const data = await loadCurrencies();
-  populateDropdowns(data);
+  const filtered = filterByMode(data, modeSelect.value);
+  populateDropdowns(filtered);
 })();
 
-// Event tombol convert
 convertBtn.addEventListener("click", convertCurrency);
 
-// Jika ada mode select, update dropdown sesuai mode
-if (modeSelect) {
-  modeSelect.addEventListener("change", async () => {
-    const data = await loadCurrencies();
-    populateDropdowns(data);
-  });
-}
+modeSelect.addEventListener("change", async () => {
+  const data = await loadCurrencies();
+  const filtered = filterByMode(data, modeSelect.value);
+  populateDropdowns(filtered);
+});
