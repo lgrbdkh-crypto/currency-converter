@@ -1,4 +1,4 @@
-// script.js (versi fix)
+// ✅ script.js — versi fix untuk GitHub Pages
 const fromCurrency = document.getElementById("fromCurrency");
 const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
@@ -6,23 +6,26 @@ const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 const rateChart = document.getElementById("rateChart");
 
-const apiUrl = "https://api.frankfurter.app"; // API bebas & cepat
+// gunakan API bebas & stabil
+const apiKey = "91e31f5c31a3a5b8d501bfb5"; // key publik gratis
+const apiUrl = `https://v6.exchangerate-api.com/v6/${apiKey}`;
 
 async function loadCurrencies() {
   try {
-    const response = await fetch(`${apiUrl}/currencies`);
+    console.log("Loading currencies...");
+    const response = await fetch(`${apiUrl}/latest/USD`);
     const data = await response.json();
-    const currencies = Object.keys(data);
+    const currencies = Object.keys(data.conversion_rates);
 
     currencies.forEach(code => {
       const option1 = document.createElement("option");
       option1.value = code;
-      option1.textContent = `${code} - ${data[code]}`;
+      option1.textContent = code;
       fromCurrency.appendChild(option1);
 
       const option2 = document.createElement("option");
       option2.value = code;
-      option2.textContent = `${code} - ${data[code]}`;
+      option2.textContent = code;
       toCurrency.appendChild(option2);
     });
 
@@ -45,39 +48,37 @@ async function convertCurrency() {
   }
 
   try {
-    const response = await fetch(`${apiUrl}/latest?amount=${amount}&from=${from}&to=${to}`);
+    const response = await fetch(`${apiUrl}/pair/${from}/${to}/${amount}`);
     const data = await response.json();
-    const rate = data.rates[to];
-    const converted = (amount * rate).toFixed(2);
-    result.textContent = `${amount} ${from} = ${converted} ${to}`;
 
-    updateChart(from, to);
+    if (data.conversion_result) {
+      result.textContent = `${amount} ${from} = ${data.conversion_result.toFixed(2)} ${to}`;
+      updateChart(from, to);
+    } else {
+      result.textContent = "Conversion failed 😢";
+    }
   } catch (error) {
-    result.textContent = "Conversion failed 😢";
+    result.textContent = "Error fetching rate 😢";
     console.error(error);
   }
 }
 
 async function updateChart(from, to) {
   try {
-    const endDate = new Date().toISOString().split("T")[0];
-    const startDate = "2024-11-01";
-
-    const response = await fetch(`${apiUrl}/${startDate}..${endDate}?from=${from}&to=${to}`);
+    const response = await fetch(`${apiUrl}/latest/${from}`);
     const data = await response.json();
-
-    const labels = Object.keys(data.rates);
-    const values = labels.map(date => data.rates[date][to]);
+    const rates = data.conversion_rates;
+    const labels = Object.keys(rates).slice(0, 10);
+    const values = labels.map(l => rates[l]);
 
     new Chart(rateChart, {
-      type: "line",
+      type: "bar",
       data: {
         labels,
         datasets: [{
-          label: `${from} to ${to}`,
+          label: `${from} Exchange Rates`,
           data: values,
-          borderColor: "#4a90e2",
-          backgroundColor: "rgba(74,144,226,0.1)"
+          backgroundColor: "rgba(74,144,226,0.5)"
         }]
       },
       options: {
@@ -86,7 +87,7 @@ async function updateChart(from, to) {
       }
     });
   } catch (error) {
-    console.error("Error loading chart:", error);
+    console.error("Chart load error:", error);
   }
 }
 
