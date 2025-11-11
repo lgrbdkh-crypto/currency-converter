@@ -1,24 +1,26 @@
-const modeSelect = document.getElementById("modeSelect");
+// Ambil elemen HTML
+const modeSelect = document.getElementById("modeSelect"); // kalau ada menu mode
 const fromCurrency = document.getElementById("fromCurrency");
 const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 
-// Load currencies from JSON
+// Load currencies dari JSON
 async function loadCurrencies() {
   const res = await fetch("currencies.json");
   const data = await res.json();
   return data;
 }
 
-// Populate dropdowns
+// Populate dropdown
 function populateDropdowns(symbols) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
 
   for (const code in symbols) {
     const name = symbols[code];
+
     const option1 = document.createElement("option");
     option1.value = code;
     option1.textContent = `${code} - ${name}`;
@@ -34,7 +36,6 @@ function populateDropdowns(symbols) {
 // Convert currency
 async function convertCurrency() {
   const data = await loadCurrencies();
-  const mode = modeSelect.value;
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
@@ -48,27 +49,38 @@ async function convertCurrency() {
     let converted = 0;
     const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
 
-    if (mode === "fiat" || (!cryptoCoins.includes(from) && !cryptoCoins.includes(to))) {
-      // fiat -> fiat
+    // Cek apakah from/to adalah crypto
+    const isFromCrypto = cryptoCoins.includes(from);
+    const isToCrypto = cryptoCoins.includes(to);
+
+    if (!isFromCrypto && !isToCrypto) {
+      // fiat → fiat
       const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
       const res = await fetch(url);
       const data = await res.json();
       converted = data.result;
     } else {
-      // crypto -> fiat or crypto
-      const coinMap = {};
-      cryptoCoins.forEach(c => coinMap[c] = c.toLowerCase());
-      const fiatMap = {};
-      Object.keys(data).forEach(c => {
-        if (!cryptoCoins.includes(c)) fiatMap[c] = c.toLowerCase();
-      });
+      // crypto → fiat / crypto
+      // Map coin ke ID CoinGecko
+      const coinMap = {
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "USDT": "tether",
+        "BNB": "binancecoin",
+        "XRP": "ripple",
+        "DOGE": "dogecoin",
+        "LTC": "litecoin",
+        "ADA": "cardano",
+        "SOL": "solana"
+      };
 
-      let fromId = cryptoCoins.includes(from) ? coinMap[from] : fiatMap[from];
-      let toId = cryptoCoins.includes(to) ? coinMap[to] : fiatMap[to];
+      const fromId = cryptoCoins.includes(from) ? coinMap[from] : from.toLowerCase();
+      const toId = cryptoCoins.includes(to) ? coinMap[to] : to.toLowerCase();
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
       const res = await fetch(url);
       const dataCG = await res.json();
+
       converted = dataCG[fromId][toId] * amount;
     }
 
@@ -79,18 +91,19 @@ async function convertCurrency() {
   }
 }
 
-// Mode change listener
-modeSelect.addEventListener("change", async () => {
-  const data = await loadCurrencies();
-  // Ambil semua mata uang (flat) untuk dropdown, tetap bisa pilih fiat/crypto via mode
-  populateDropdowns(data);
-});
-
-// Initial load
+// Inisialisasi dropdown saat page load
 (async function init() {
   const data = await loadCurrencies();
   populateDropdowns(data);
 })();
 
-// Convert button click
+// Event tombol convert
 convertBtn.addEventListener("click", convertCurrency);
+
+// Jika ada mode select, update dropdown sesuai mode
+if (modeSelect) {
+  modeSelect.addEventListener("change", async () => {
+    const data = await loadCurrencies();
+    populateDropdowns(data);
+  });
+}
