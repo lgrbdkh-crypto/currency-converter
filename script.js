@@ -1,41 +1,45 @@
+const modeSelect = document.getElementById("modeSelect");
 const fromCurrency = document.getElementById("fromCurrency");
 const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
 
-// Load currencies dari JSON lokal
-async function loadCurrencies() {
-  try {
-    const response = await fetch("currencies.json");
-    if (!response.ok) throw new Error("currencies.json tidak ditemukan");
-    const data = await response.json();
-    if (!data) throw new Error("currencies.json kosong atau invalid");
+// Load fiat currencies dari exchangerate.host
+async function loadFiatCurrencies() {
+  const res = await fetch("https://api.exchangerate.host/symbols");
+  const data = await res.json();
+  return data.symbols; // object { USD: {description:"US Dollar"}, ... }
+}
 
-    const currencies = Object.keys(data);
+// Load crypto currencies dari file lokal
+async function loadCryptoCurrencies() {
+  const res = await fetch("crypto.json");
+  const data = await res.json();
+  return data; // object { BTC: "Bitcoin", ... }
+}
 
-    currencies.forEach(code => {
-      const option1 = document.createElement("option");
-      option1.value = code;
-      option1.textContent = `${code} - ${data[code]}`;
-      fromCurrency.appendChild(option1);
+// Populate dropdowns
+function populateDropdowns(symbols) {
+  fromCurrency.innerHTML = "";
+  toCurrency.innerHTML = "";
+  for (const code in symbols) {
+    const name = symbols[code].description || symbols[code];
+    const option1 = document.createElement("option");
+    option1.value = code;
+    option1.textContent = `${code} - ${name}`;
+    fromCurrency.appendChild(option1);
 
-      const option2 = document.createElement("option");
-      option2.value = code;
-      option2.textContent = `${code} - ${data[code]}`;
-      toCurrency.appendChild(option2);
-    });
-
-    fromCurrency.value = "USD";
-    toCurrency.value = "IDR";
-  } catch (error) {
-    result.textContent = "Gagal memuat daftar mata uang 😢 — " + error.message;
-    console.error(error);
+    const option2 = document.createElement("option");
+    option2.value = code;
+    option2.textContent = `${code} - ${name}`;
+    toCurrency.appendChild(option2);
   }
 }
 
-// Fungsi convert real-time
+// Convert function
 async function convertCurrency() {
+  const mode = modeSelect.value;
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
@@ -47,26 +51,25 @@ async function convertCurrency() {
 
   try {
     let converted = 0;
-    const cryptoCodes = ["BTC","ETH","USDT","BNB"];
-    const fiatCodes = ["USD","EUR","IDR","JPY","GBP","AUD","CAD","CHF","CNY","SGD"];
 
-    if (cryptoCodes.includes(from) || cryptoCodes.includes(to)) {
-      // CoinGecko API
+    if (mode === "fiat") {
+      // fiat -> fiat
+      const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      converted = data.result;
+    } else {
+      // crypto -> fiat/crypto
       const fiatMap = {USD:"usd",EUR:"eur",IDR:"idr",JPY:"jpy",GBP:"gbp",AUD:"aud",CAD:"cad",CHF:"chf",CNY:"cny",SGD:"sgd"};
+      const cryptoCodes = ["BTC","ETH","USDT","BNB","XRP","DOGE"];
       let fromId = cryptoCodes.includes(from) ? from.toLowerCase() : fiatMap[from];
       let toId = cryptoCodes.includes(to) ? to.toLowerCase() : fiatMap[to];
 
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const res = await fetch(url);
+      const data = await res.json();
 
       converted = data[fromId][toId] * amount;
-    } else {
-      // fiat ke fiat via exchangerate.host
-      const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      converted = data.result;
     }
 
     result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
@@ -76,5 +79,21 @@ async function convertCurrency() {
   }
 }
 
+// Mode change listener
+modeSelect.addEventListener("change", async () => {
+  if (modeSelect.value === "fiat") {
+    const fiatSymbols = await loadFiatCurrencies();
+    populateDropdowns(fiatSymbols);
+  } else {
+    const cryptoSymbols = await loadCryptoCurrencies();
+    populateDropdowns(cryptoSymbols);
+  }
+});
+
+// Initial load
+(async function init() {
+  const fiatSymbols = await loadFiatCurrencies();
+  populateDropdowns(fiatSymbols);
+})();
+
 convertBtn.addEventListener("click", convertCurrency);
-loadCurrencies();
