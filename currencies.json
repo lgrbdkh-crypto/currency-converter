@@ -8,5 +8,9 @@
   "CAD": "Canadian Dollar",
   "CHF": "Swiss Franc",
   "CNY": "Chinese Yuan",
-  "SGD": "Singapore Dollar"
+  "SGD": "Singapore Dollar",
+  "BTC": "Bitcoin",
+  "ETH": "Ethereum",
+  "USDT": "Tether",
+  "BNB": "Binance Coin"
 }
