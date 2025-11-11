@@ -1,0 +1,76 @@
+body {
+  font-family: "Poppins", sans-serif;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(135deg, #0d1117, #1b2230);
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.container {
+  width: 420px;
+  background: #161b22;
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0px 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+h2 {
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+label {
+  font-size: 14px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+select, input {
+  width: 100%;
+  padding: 10px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  background: #238636;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 16px;
+  margin-top: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #2ea043;
+}
+
+.result-box {
+  margin-top: 20px;
+  background: #0d1117;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #30363d;
+  font-size: 16px;
+  text-align: center;
+}
+
+.chart-box {
+  margin-top: 25px;
+  background: #0d1117;
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid #30363d;
+}
