@@ -1,4 +1,3 @@
-// script.js — versi GitHub Pages aman tanpa API eksternal
 const fromCurrency = document.getElementById("fromCurrency");
 const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
@@ -9,7 +8,10 @@ const amountInput = document.getElementById("amount");
 async function loadCurrencies() {
   try {
     const response = await fetch("currencies.json");
+    if (!response.ok) throw new Error("currencies.json not found");
     const data = await response.json();
+    if (!data) throw new Error("currencies.json kosong atau invalid");
+
     const currencies = Object.keys(data);
 
     currencies.forEach(code => {
@@ -27,23 +29,23 @@ async function loadCurrencies() {
     fromCurrency.value = "USD";
     toCurrency.value = "IDR";
   } catch (error) {
-    result.textContent = "Failed to load currencies 😢";
+    result.textContent = "Gagal memuat daftar mata uang 😢 — " + error.message;
     console.error(error);
   }
 }
 
-// Fungsi konversi sederhana (pakai nilai tukar statis untuk demo)
+// Fungsi convert sederhana dengan rate statis
 function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
 
   if (!amount || amount <= 0) {
-    result.textContent = "Please enter a valid amount.";
+    result.textContent = "Masukkan jumlah yang valid.";
     return;
   }
 
-  // Contoh rate statis (bisa diperluas nanti)
+  // Contoh rate statis
   const rates = {
     USD: 1,
     EUR: 0.92,
@@ -61,8 +63,5 @@ function convertCurrency() {
   result.textContent = `${amount} ${from} = ${converted.toFixed(2)} ${to}`;
 }
 
-// Event listener tombol convert
 convertBtn.addEventListener("click", convertCurrency);
-
-// Load currencies saat halaman terbuka
 loadCurrencies();
