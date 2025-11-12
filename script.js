@@ -9,11 +9,20 @@ const chartCanvas = document.getElementById("rateChart");
 let rateChart = null;
 const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
 
+// ✅ Load daftar mata uang
 async function loadCurrencies() {
-  const res = await fetch("currencies.json");
-  return res.json();
+  try {
+    const res = await fetch("currencies.json?nocache=" + Date.now());
+    if (!res.ok) throw new Error("currencies.json not found!");
+    return res.json();
+  } catch (err) {
+    console.error("Failed to load currencies:", err);
+    alert("❌ Gagal memuat currencies.json — pastikan file ada di root folder.");
+    return {};
+  }
 }
 
+// ✅ Filter sesuai mode
 function filterByMode(data, mode) {
   if (mode === "fiat") {
     return Object.fromEntries(Object.entries(data).filter(([k]) => !cryptoCoins.includes(k)));
@@ -23,6 +32,7 @@ function filterByMode(data, mode) {
   return data;
 }
 
+// ✅ Isi dropdown
 function populateDropdowns(data) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
@@ -34,25 +44,31 @@ function populateDropdowns(data) {
   }
 }
 
+// ✅ Konversi
 async function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
+
   if (!amount || amount <= 0) {
-    result.textContent = "Please enter a valid amount.";
+    result.textContent = "⚠️ Please enter a valid amount.";
     return;
   }
 
   try {
-    let converted = null;
+    console.log("Converting:", amount, from, "to", to);
+
     const isFromCrypto = cryptoCoins.includes(from);
     const isToCrypto = cryptoCoins.includes(to);
+    let converted = null;
 
     if (!isFromCrypto && !isToCrypto) {
+      // 💱 Fiat ke Fiat
       const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
       const data = await (await fetch(url)).json();
       converted = data.result;
     } else {
+      // 💰 Crypto logic
       const coinMap = {
         "BTC": "bitcoin",
         "ETH": "ethereum",
@@ -65,17 +81,16 @@ async function convertCurrency() {
         "SOL": "solana"
       };
 
-      const fromId = isFromCrypto ? coinMap[from] : from.toLowerCase();
-      const toId = isToCrypto ? coinMap[to] : to.toLowerCase();
+      const fromId = coinMap[from] || from.toLowerCase();
+      const toId = coinMap[to] || to.toLowerCase();
 
-      // coba langsung
       let url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
       let data = await (await fetch(url)).json();
 
       if (data[fromId]?.[toId] !== undefined) {
         converted = data[fromId][toId] * amount;
       } else {
-        // pakai USD bridge
+        // Pakai USD bridge
         const urlBridge = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`;
         const dataBridge = await (await fetch(urlBridge)).json();
 
@@ -86,67 +101,60 @@ async function convertCurrency() {
         }
       }
 
-      // tampilkan grafik untuk crypto
-      if (isFromCrypto || isToCrypto) {
-        await loadChart(fromId, toId);
-      }
+      // tampilkan grafik jika crypto terlibat
+      await loadChart(fromId, toId);
     }
 
     if (converted === null || isNaN(converted)) {
-      result.textContent = "Conversion failed 😢 — no rate found.";
+      result.textContent = "❌ Conversion failed — no rate found.";
     } else {
       result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
     }
   } catch (err) {
+    console.error("❌ Error during conversion:", err);
     result.textContent = "Conversion failed 😢 — " + err.message;
-    console.error(err);
   }
 }
 
-// 🔹 Chart.js: tampilkan grafik historis harga 7 hari
+// ✅ Chart.js
 async function loadChart(fromId, toId) {
-  if (!chartCanvas) return;
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${fromId}/market_chart?vs_currency=${toId}&days=7`;
+    const res = await fetch(url);
+    const data = await res.json();
 
-  const url = `https://api.coingecko.com/api/v3/coins/${fromId}/market_chart?vs_currency=${toId}&days=7`;
-  const res = await fetch(url);
-  const data = await res.json();
+    if (!data.prices) return;
 
-  if (!data.prices) {
+    const labels = data.prices.map(p => new Date(p[0]).toLocaleDateString());
+    const prices = data.prices.map(p => p[1]);
+
     if (rateChart) rateChart.destroy();
-    return;
-  }
-
-  const labels = data.prices.map(p => new Date(p[0]).toLocaleDateString());
-  const prices = data.prices.map(p => p[1]);
-
-  if (rateChart) rateChart.destroy();
-  rateChart = new Chart(chartCanvas, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: `${fromId.toUpperCase()} price in ${toId.toUpperCase()} (7 days)`,
-        data: prices,
-        borderColor: "#007bff",
-        fill: false,
-        tension: 0.2
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true }
+    rateChart = new Chart(chartCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: `${fromId.toUpperCase()} → ${toId.toUpperCase()} (7 days)`,
+          data: prices,
+          borderColor: "#007bff",
+          fill: false,
+          tension: 0.2
+        }]
       },
-      scales: {
-        y: {
-          beginAtZero: false
-        }
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: { y: { beginAtZero: false } }
       }
-    }
-  });
+    });
+  } catch (err) {
+    console.error("Chart error:", err);
+  }
 }
 
+// ✅ Init
 (async function init() {
+  console.log("🔄 Loading currencies...");
   const data = await loadCurrencies();
   populateDropdowns(filterByMode(data, modeSelect.value));
 })();
