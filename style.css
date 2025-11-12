@@ -51,3 +51,13 @@ button:hover {
   border-radius: 5px;
   text-align: center;
 }
+
+.chart-container {
+  margin-top: 20px;
+  height: 250px;
+}
+
+canvas {
+  width: 100% !important;
+  height: 250px !important;
+}
