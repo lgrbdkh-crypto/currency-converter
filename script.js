@@ -4,13 +4,14 @@ const toCurrency = document.getElementById("toCurrency");
 const convertBtn = document.getElementById("convertBtn");
 const result = document.getElementById("result");
 const amountInput = document.getElementById("amount");
+const chartCanvas = document.getElementById("rateChart");
 
+let rateChart = null;
 const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
 
 async function loadCurrencies() {
   const res = await fetch("currencies.json");
-  const data = await res.json();
-  return data;
+  return res.json();
 }
 
 function filterByMode(data, mode) {
@@ -19,25 +20,17 @@ function filterByMode(data, mode) {
   } else if (mode === "crypto") {
     return Object.fromEntries(Object.entries(data).filter(([k]) => cryptoCoins.includes(k)));
   }
-  return data; // all
+  return data;
 }
 
 function populateDropdowns(data) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
-
-  for (const code in data) {
-    const name = data[code];
-
-    const option1 = document.createElement("option");
-    option1.value = code;
-    option1.textContent = `${code} - ${name}`;
-    fromCurrency.appendChild(option1);
-
-    const option2 = document.createElement("option");
-    option2.value = code;
-    option2.textContent = `${code} - ${name}`;
-    toCurrency.appendChild(option2);
+  for (const [code, name] of Object.entries(data)) {
+    const opt1 = new Option(`${code} - ${name}`, code);
+    const opt2 = new Option(`${code} - ${name}`, code);
+    fromCurrency.add(opt1);
+    toCurrency.add(opt2);
   }
 }
 
@@ -45,7 +38,6 @@ async function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
   const amount = parseFloat(amountInput.value);
-
   if (!amount || amount <= 0) {
     result.textContent = "Please enter a valid amount.";
     return;
@@ -57,14 +49,10 @@ async function convertCurrency() {
     const isToCrypto = cryptoCoins.includes(to);
 
     if (!isFromCrypto && !isToCrypto) {
-      // 🔹 Fiat → Fiat
       const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await (await fetch(url)).json();
       converted = data.result;
-
     } else {
-      // 🔹 Crypto atau campuran
       const coinMap = {
         "BTC": "bitcoin",
         "ETH": "ethereum",
@@ -80,25 +68,27 @@ async function convertCurrency() {
       const fromId = isFromCrypto ? coinMap[from] : from.toLowerCase();
       const toId = isToCrypto ? coinMap[to] : to.toLowerCase();
 
-      // 🔸 1. Coba konversi langsung
+      // coba langsung
       let url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
-      let res = await fetch(url);
-      let dataCG = await res.json();
+      let data = await (await fetch(url)).json();
 
-      if (dataCG[fromId] && dataCG[fromId][toId] !== undefined) {
-        converted = dataCG[fromId][toId] * amount;
+      if (data[fromId]?.[toId] !== undefined) {
+        converted = data[fromId][toId] * amount;
       } else {
-        // 🔸 2. Jika gagal, coba pakai USD sebagai jembatan
-        console.warn("Direct conversion not available, using USD bridge...");
+        // pakai USD bridge
         const urlBridge = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`;
-        const resBridge = await fetch(urlBridge);
-        const dataBridge = await resBridge.json();
+        const dataBridge = await (await fetch(urlBridge)).json();
 
         if (dataBridge[fromId]?.usd && dataBridge[toId]?.usd) {
           converted = (dataBridge[fromId].usd / dataBridge[toId].usd) * amount;
         } else {
-          throw new Error("Conversion data not available from CoinGecko");
+          throw new Error("Conversion data unavailable.");
         }
+      }
+
+      // tampilkan grafik untuk crypto
+      if (isFromCrypto || isToCrypto) {
+        await loadChart(fromId, toId);
       }
     }
 
@@ -107,23 +97,63 @@ async function convertCurrency() {
     } else {
       result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
     }
-
-  } catch (error) {
-    result.textContent = "Conversion failed 😢 — " + error.message;
-    console.error(error);
+  } catch (err) {
+    result.textContent = "Conversion failed 😢 — " + err.message;
+    console.error(err);
   }
+}
+
+// 🔹 Chart.js: tampilkan grafik historis harga 7 hari
+async function loadChart(fromId, toId) {
+  if (!chartCanvas) return;
+
+  const url = `https://api.coingecko.com/api/v3/coins/${fromId}/market_chart?vs_currency=${toId}&days=7`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.prices) {
+    if (rateChart) rateChart.destroy();
+    return;
+  }
+
+  const labels = data.prices.map(p => new Date(p[0]).toLocaleDateString());
+  const prices = data.prices.map(p => p[1]);
+
+  if (rateChart) rateChart.destroy();
+  rateChart = new Chart(chartCanvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: `${fromId.toUpperCase()} price in ${toId.toUpperCase()} (7 days)`,
+        data: prices,
+        borderColor: "#007bff",
+        fill: false,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true }
+      },
+      scales: {
+        y: {
+          beginAtZero: false
+        }
+      }
+    }
+  });
 }
 
 (async function init() {
   const data = await loadCurrencies();
-  const filtered = filterByMode(data, modeSelect.value);
-  populateDropdowns(filtered);
+  populateDropdowns(filterByMode(data, modeSelect.value));
 })();
-
-convertBtn.addEventListener("click", convertCurrency);
 
 modeSelect.addEventListener("change", async () => {
   const data = await loadCurrencies();
-  const filtered = filterByMode(data, modeSelect.value);
-  populateDropdowns(filtered);
+  populateDropdowns(filterByMode(data, modeSelect.value));
 });
+
+convertBtn.addEventListener("click", convertCurrency);
