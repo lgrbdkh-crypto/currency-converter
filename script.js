@@ -7,59 +7,81 @@ const amountInput = document.getElementById("amount");
 const chartCanvas = document.getElementById("rateChart");
 
 let rateChart = null;
-
-// Crypto list
 const cryptoCoins = ["BTC","ETH","USDT","BNB","XRP","DOGE","LTC","ADA","SOL"];
 
-// Crypto → CoinGecko mapping
-const coinMap = {
-  "BTC": "bitcoin",
-  "ETH": "ethereum",
-  "USDT": "tether",
-  "BNB": "binancecoin",
-  "XRP": "ripple",
-  "DOGE": "dogecoin",
-  "LTC": "litecoin",
-  "ADA": "cardano",
-  "SOL": "solana"
+// ✅ Fallback data jika currencies.json gagal
+const fallbackCurrencies = {
+  "USD": "US Dollar",
+  "EUR": "Euro",
+  "IDR": "Indonesian Rupiah",
+  "JPY": "Japanese Yen",
+  "GBP": "British Pound",
+  "AUD": "Australian Dollar",
+  "CAD": "Canadian Dollar",
+  "CHF": "Swiss Franc",
+  "CNY": "Chinese Yuan",
+  "SGD": "Singapore Dollar",
+  "NZD": "New Zealand Dollar",
+  "KRW": "South Korean Won",
+  "INR": "Indian Rupee",
+  "RUB": "Russian Ruble",
+  "BRL": "Brazilian Real",
+  "MXN": "Mexican Peso",
+  "ZAR": "South African Rand",
+  "TRY": "Turkish Lira",
+  "SAR": "Saudi Riyal",
+  "AED": "UAE Dirham",
+  "THB": "Thai Baht",
+  "MYR": "Malaysian Ringgit",
+  "PHP": "Philippine Peso",
+  "VND": "Vietnamese Dong",
+  "EGP": "Egyptian Pound",
+  "BTC": "Bitcoin",
+  "ETH": "Ethereum",
+  "USDT": "Tether",
+  "BNB": "Binance Coin",
+  "XRP": "Ripple",
+  "DOGE": "Dogecoin",
+  "LTC": "Litecoin",
+  "ADA": "Cardano",
+  "SOL": "Solana"
 };
 
-// Load currencies list from JSON
+// ✅ Load daftar mata uang
 async function loadCurrencies() {
   try {
     const res = await fetch("currencies.json?nocache=" + Date.now());
-    if (!res.ok) throw new Error("currencies.json not found");
+    if (!res.ok) throw new Error("File currencies.json tidak ditemukan, menggunakan fallback.");
     return res.json();
   } catch (err) {
-    console.error("Load currencies failed:", err);
-    alert("❌ currencies.json tidak ditemukan.");
-    return {};
+    console.warn(err.message);
+    return fallbackCurrencies;
   }
 }
 
-// Filter dropdown by mode
+// ✅ Filter sesuai mode
 function filterByMode(data, mode) {
-  if (mode === "fiat")
+  if (mode === "fiat") {
     return Object.fromEntries(Object.entries(data).filter(([k]) => !cryptoCoins.includes(k)));
-
-  if (mode === "crypto")
+  } else if (mode === "crypto") {
     return Object.fromEntries(Object.entries(data).filter(([k]) => cryptoCoins.includes(k)));
-
+  }
   return data;
 }
 
-// Populate dropdowns
+// ✅ Isi dropdown
 function populateDropdowns(data) {
   fromCurrency.innerHTML = "";
   toCurrency.innerHTML = "";
-
   for (const [code, name] of Object.entries(data)) {
-    fromCurrency.add(new Option(`${code} - ${name}`, code));
-    toCurrency.add(new Option(`${code} - ${name}`, code));
+    const opt1 = new Option(`${code} - ${name}`, code);
+    const opt2 = new Option(`${code} - ${name}`, code);
+    fromCurrency.add(opt1);
+    toCurrency.add(opt2);
   }
 }
 
-// MAIN CONVERSION FUNCTION
+// ✅ Konversi
 async function convertCurrency() {
   const from = fromCurrency.value;
   const to = toCurrency.value;
@@ -70,83 +92,79 @@ async function convertCurrency() {
     return;
   }
 
-  const isFromCrypto = cryptoCoins.includes(from);
-  const isToCrypto = cryptoCoins.includes(to);
-
   try {
+    const isFromCrypto = cryptoCoins.includes(from);
+    const isToCrypto = cryptoCoins.includes(to);
     let converted = null;
 
-    // ============================================================
-    // 🌍 FIAT → FIAT  (Fix utama — USD → IDR bekerja di sini)
-    // ============================================================
     if (!isFromCrypto && !isToCrypto) {
-      const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`;
+      // 💱 Fiat ke Fiat
+      const url = `https://api.exchangerate.host/convert?from=${from}&to=${to}&amount=${amount}`;
       const data = await (await fetch(url)).json();
+      converted = data.result;
+    } else {
+      // 💰 Crypto logic
+      const coinMap = {
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "USDT": "tether",
+        "BNB": "binancecoin",
+        "XRP": "ripple",
+        "DOGE": "dogecoin",
+        "LTC": "litecoin",
+        "ADA": "cardano",
+        "SOL": "solana"
+      };
 
-      if (!data.rates || !data.rates[to])
-        throw new Error("No rate found for selected fiat pair.");
-
-      converted = amount * data.rates[to];
-    }
-
-    // ============================================================
-    // 💰 CRYPTO conversion (direct or via USD bridge)
-    // ============================================================
-    else {
       const fromId = coinMap[from] || from.toLowerCase();
       const toId = coinMap[to] || to.toLowerCase();
 
-      // Direct crypto conversion
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
-      const data = await (await fetch(url)).json();
+      // Coba langsung vs toId
+      let url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId}`;
+      let data = await (await fetch(url)).json();
 
       if (data[fromId]?.[toId] !== undefined) {
         converted = data[fromId][toId] * amount;
       } else {
-        // Bridge via USD if crypto pair not supported
+        // Pakai USD bridge
         const urlBridge = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId},${toId}&vs_currencies=usd`;
         const dataBridge = await (await fetch(urlBridge)).json();
-
-        if (!dataBridge[fromId] || !dataBridge[toId])
-          throw new Error("Crypto conversion rate missing.");
-
-        converted = (dataBridge[fromId].usd / dataBridge[toId].usd) * amount;
+        if (dataBridge[fromId]?.usd && dataBridge[toId]?.usd) {
+          converted = (dataBridge[fromId].usd / dataBridge[toId].usd) * amount;
+        } else {
+          throw new Error("Conversion data unavailable.");
+        }
       }
 
-      // Load crypto chart
-      if (isFromCrypto || isToCrypto) {
-        await loadChart(fromId, isToCrypto ? toId : "usd");
-      }
+      // tampilkan grafik jika crypto terlibat
+      await loadChart(fromId, toId);
     }
 
-    // Display result
     if (converted === null || isNaN(converted)) {
       result.textContent = "❌ Conversion failed — no rate found.";
     } else {
-      result.textContent = `${amount} ${from} = ${converted.toLocaleString()} ${to}`;
+      result.textContent = `${amount} ${from} = ${converted.toFixed(6)} ${to}`;
     }
   } catch (err) {
-    console.error("Conversion error:", err);
+    console.error("❌ Error during conversion:", err);
     result.textContent = "Conversion failed 😢 — " + err.message;
   }
 }
 
-// Load crypto chart
+// ✅ Chart.js
 async function loadChart(fromId, toId) {
   try {
     const url = `https://api.coingecko.com/api/v3/coins/${fromId}/market_chart?vs_currency=${toId}&days=7`;
     const res = await fetch(url);
     const data = await res.json();
-
     if (!data.prices) return;
 
     const labels = data.prices.map(p => new Date(p[0]).toLocaleDateString());
     const prices = data.prices.map(p => p[1]);
 
     if (rateChart) rateChart.destroy();
-
     rateChart = new Chart(chartCanvas, {
-      type: "line",
+      type: 'line',
       data: {
         labels,
         datasets: [{
@@ -157,14 +175,18 @@ async function loadChart(fromId, toId) {
           tension: 0.2
         }]
       },
-      options: { responsive: true }
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: { y: { beginAtZero: false } }
+      }
     });
   } catch (err) {
-    console.error("Chart load error:", err);
+    console.warn("Chart error:", err.message);
   }
 }
 
-// Initialize
+// ✅ Init
 (async function init() {
   const data = await loadCurrencies();
   populateDropdowns(filterByMode(data, modeSelect.value));
